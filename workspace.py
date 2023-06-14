@@ -18,9 +18,17 @@ class Workspace:
 
         # Directories
         self.workspace_dir = './data/workspaces'
-        self.users_dir = './data/users'
+        self.dataflows_dir = './data/dataflows'
+        self.datasets_dir = './data/datasets'
         self.reports_dir = './data/reports'
-        self.directories = [self.workspace_dir, self.users_dir]
+        self.users_dir = './data/users'
+        self.directories = [
+            self.workspace_dir,
+            self.dataflows_dir,
+            self.datasets_dir,
+            self.reports_dir,
+            self.users_dir
+        ]
 
         for dir in self.directories:
             create_directory(dir)
