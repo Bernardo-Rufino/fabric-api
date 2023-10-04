@@ -4,3 +4,5 @@ main.ipynb
 *.json
 *.xlsx
 *.csv
+tests.py
+tests.ipynb
