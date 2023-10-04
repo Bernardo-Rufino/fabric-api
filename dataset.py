@@ -65,6 +65,67 @@ class Dataset:
 
                 return {'message': {'error': error_message, 'content': response}}
 
+
+    def execute_query(
+                self, 
+                workspace_id: str = '', 
+                dataset_id: str = '',
+                query: str = '',
+                impersonated_username: str = '') -> Dict:
+        """
+        Grants an user access to a specific dataset.
+
+        Args:
+            user_principal_name (str): user e-mail or identifier of service principal.
+            workspace_id (str): workspace id to add the user to.
+            dataset_id (str): dataset id to grant access to.
+            query (str): .
+
+        Returns:
+            Dict: status message.
+        """
+
+        # If both, user, workspace and dataset are provided...
+        if (query != '') & (workspace_id != '') & (dataset_id != ''):
+
+            request_url = self.main_url + f'/groups/{workspace_id}/datasets/{dataset_id}/executeQueries'
+
+            headers = {'Authorization': f'Bearer {self.token}'}
+
+            # Add user to dataset with the specified access right.
+            # https://learn.microsoft.com/en-us/rest/api/power-bi/datasets/post-dataset-user-in-group
+            data = {
+                "queries": [
+                    {
+                    "query": query
+                    }
+                ],
+                "serializerSettings": {
+                    "includeNulls": 'true'
+                }
+            }
+
+            # Make the request
+            r = requests.post(url=request_url, headers=headers, json=data)
+
+            # Get HTTP status and content
+            status = r.status_code
+
+            # If success...
+            if status == 200:
+                return {'message': 'Success', 'content': r.content}
+            
+            else:                
+                # If any error happens, return message.
+                # response = json.loads(r.content)
+                # error_message = response['error']['details']['message']
+
+                # return {'message': {'error': error_message, 'content': response}}
+                
+                return {'message': 'Error', 'content': r.content}
+        else:
+            return {'message': 'Missing parameters, please check.'}
+
     
     def list_users(
                 self, 
