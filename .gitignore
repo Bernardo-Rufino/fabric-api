@@ -6,3 +6,4 @@ main.ipynb
 *.csv
 tests.py
 tests.ipynb
+*.env
