@@ -1,3 +1,4 @@
+import os
 import uuid
 import json
 import requests
@@ -5,6 +6,7 @@ import pandas as pd
 from pandas.core.frame import DataFrame
 from typing import Dict, List
 from utilities import create_directory
+from workspace import Workspace
 
 
 class Dataflow:
@@ -101,8 +103,14 @@ class Dataflow:
 
             # If success...
             if status == 200:
+                
+                workspace = Workspace(self.token)
+                workspace_name = workspace.get_workspace_details(workspace_id).get('content', {}).get('name', 'notFound')
+                
                 # Save to json file
-                filename = f'{self.dataflows_dir}/dataflows_{response.get("name", "")}.json'
+                filepath = f'{self.dataflows_dir}/{workspace_name}/dataflows'
+                filename = f'{filepath}/{response.get("name", "")}.json'
+                os.makedirs(filepath, exist_ok=True)
 
                 with open(filename, mode='w', encoding='utf-8-sig') as f:
                     json.dump(response, f, ensure_ascii=True, indent=4)
