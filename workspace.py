@@ -101,6 +101,48 @@ class Workspace:
             return {'message': {'error': error_message, 'content': response}}
 
 
+    def get_workspace_details(
+                self, 
+                workspace_id: str = '') -> Dict:
+        """
+        Get details for a specific workspace that the user has access to.
+
+        Args:
+            workspace_id (str, optional): workspace id to search for.
+
+        Returns:
+            Dict: status message and content.
+        """
+        # Main URL
+        request_url = self.main_url + f'/groups'
+
+        # If no workspace ID was informed...
+        if (workspace_id == ''):
+            return {'message': 'Missing parameters, please check.', 'content': ''}
+
+        # If workspace ID was informed...
+        elif workspace_id != '':
+            request_url = f"{request_url}/{workspace_id}"
+
+        # Make the request
+        r = requests.get(url=request_url, headers=self.headers)
+
+        # Get HTTP status and content
+        status = r.status_code
+        response = json.loads(r.content)
+
+        # If success...
+        if status == 200:            
+            return {'message': 'Success', 'content': response}
+
+        else:                
+            # If any error happens, return message.
+            response = json.loads(r.content)
+            error_message = response['error']['message']
+
+            return {'message': {'error': error_message, 'content': response}}
+
+
     def list_users(self, workspace_id: str = '') -> Dict:
         """
         List all users in a workspace_id that the user has access to.
@@ -248,6 +290,7 @@ class Workspace:
                 
                 try:
                     # If any error happens, return message.
+                    print(f'status={status}, response={response}')
                     response = json.loads(r.content)
                     error_message = response['error']
 
@@ -302,13 +345,20 @@ class Workspace:
             if status == 200:
                 return {'message': 'Success'}
             
+            elif status == 401:
+                return {'message': 'Not enough privileges to update user.'}
+            
+            elif status == 404:
+                return {'message': 'User was not found in workspace.'}
+            
             else:
                 
+                print(f'status={status}, response={response}')
                 response = json.loads(r.content)                
                 # If any error happens, return message.
-                error_message = response['error']['code']
+                error_message = f"Error for workspace_id={workspace_id}: response['error']['code']"
 
-                return {'message': {'error': error_message, 'content': response}}
+                return {'message': {'error_status': {r.status_code}, 'error': error_message, 'content': r.content}}
 
         else:
             return {'message': 'Missing parameters, please check.'}
@@ -343,9 +393,16 @@ class Workspace:
             # If success...
             if status == 200:
                 return {'message': 'Success'}
+            
+            elif status == 401:
+                return {'message': 'Not enough privileges to remove user.'}
+            
+            elif status == 404:
+                return {'message': 'User was not found in workspace.'}
 
             else:                
                 # If any error happens, return message.
+                print(f'status={status}, response={response}')
                 error_message = response['error']['message']
 
                 return {'message': {'error': error_message, 'content': response}}
