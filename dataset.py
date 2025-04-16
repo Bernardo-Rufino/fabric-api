@@ -1,6 +1,8 @@
+import os
 import json
 import requests
 import pandas as pd
+import workspace
 from typing import Dict
 from utilities import create_directory
 
@@ -353,47 +355,40 @@ class Dataset:
 
     def list_dataset_related_reports(
                 self, 
-                workspace_id: str = '', dataset_id: str = '') -> Dict:
+                workspace_id: str = '',
+                dataset_id: str = '',
+                workspace: workspace.Workspace = None) -> Dict:
         """
         List all reports related to a specific dataset.
 
         Args:
             workspace_id (str, optional): workspace id where dataset is published.
             dataset_id (str, optional): dataset id to search reports from.
+            workspace (Workspace, optional): workspace object to list reports.
 
         Returns:
             Dict: status message and content.
         """
 
-        # Main URL
-        request_url = f'{self.main_url}/groups/{workspace_id}/datasets/{dataset_id}/reports'
+        dataset_reports = []
+        filename = f'dataset_reports_{dataset_id}.xlsx'
+        file_path = f'{self.data_dir}/reports'
 
-        # If workspace ID was not informed, return error message...
-        if workspace_id == '' or dataset_id == '':
-            return {'message': 'Missing workspace id or dataset id, please check.', 'content': ''}
+        os.makedirs(file_path, exist_ok=True)
+        
+        try:
+        
+            workspace_reports = workspace.list_reports(workspace_id=workspace_id)
 
-        # If workspace ID and dataset ID was informed...
-        else: 
-            filename = f'dataset_reports_{dataset_id}.xlsx'
+            for report in workspace_reports['content']:
+                if report['datasetId'] == dataset_id:
+                    dataset_reports.append(report)
 
-            # Make the request
-            r = requests.get(url=request_url, headers=self.headers)
+            # Save to Excel file
+            df = pd.DataFrame(dataset_reports)
+            df.to_excel(f'{self.data_dir}/reports/{filename}', index=False)
 
-            # Get HTTP status and content
-            status = r.status_code
-            response = json.loads(r.content).get('value', '')
+            return {'message': 'Success', 'content': dataset_reports}
 
-            # If success...
-            if status == 200:
-                # Save to Excel file
-                df = pd.DataFrame(response)
-                df.to_excel(f'{self.data_dir}/reports/{filename}', index=False)
-                
-                return {'message': 'Success', 'content': response}
-
-            else:                
-                # If any error happens, return message.
-                response = json.loads(r.content)
-                error_message = response['error']['message']
-
-                return {'message': {'error': error_message, 'content': response}}
+        except Exception as error_message:
+            return {'message': {'error': error_message, 'content': dataset_reports}}
