@@ -1,11 +1,11 @@
 .venv
 __pycache__
-main.ipynb
+*.ipynb
 *.json
 *.xlsx
 *.csv
-tests.py
-tests.ipynb
 *.env
-clean_up.ipynb
 *.zip
+*.pbix
+tests.py
+!usage.ipynb
