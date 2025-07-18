@@ -218,8 +218,7 @@ class Workspace:
         
     def list_reports(self, workspace_id: str = '') -> Dict:
         """
-        List all users in a workspace_id that the user has access to.
-
+        List all reports for a specific workspace.
         Args:
             workspace_id (str, optional): workspace id to search for.
 

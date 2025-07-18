@@ -72,7 +72,9 @@ class Report:
                 self, 
                 workspace_id: str = '',
                 report_id: str = '',
-                report_name: str = '') -> Dict:
+                report_name: str = '',
+                dataset_name: str = '',
+                replace_existing: bool = False) -> Dict:
         """
         Export a specific report to a .pbix file.
 
@@ -80,6 +82,8 @@ class Report:
             workspace_id (str, optional): workspace id to search datasets from.
             report_id (str, optional): report id to be exported.
             report_name (str, optional): report name to be saved.
+            dataset_name (str, optional): dataset name to be associated with the report.
+            replace_existing (bool, optional): if True, replace existing file with the same name.
 
         Returns:
             Dict: status message and content.
@@ -97,7 +101,7 @@ class Report:
         # If workspace ID and report ID were informed...
         else: 
             filename = f'{report_name}.pbix'
-            file_path = f'{self.data_dir}/exports'
+            file_path = f'{self.data_dir}/exports/{dataset_name}'
 
             create_directory(file_path)
 
@@ -109,9 +113,12 @@ class Report:
 
             # If success...
             if status == 200:
-                # Save to Excel file
-                with open(f'{file_path}/{filename}', 'wb') as f:
-                    f.write(r.content)
+                if not replace_existing and os.path.exists(f'{file_path}/{filename}'):
+                    return {'message': f'File {filename} already exists.', 'content': ''}
+                # Save to PBIX file
+                else:
+                    with open(f'{file_path}/{filename}', 'wb') as f:
+                        f.write(r.content)
                 
                 return {'message': 'Success', 'content': 'File downloaded successfully.'}
 

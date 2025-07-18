@@ -3,6 +3,7 @@ import json
 import requests
 import pandas as pd
 import workspace
+import report
 from typing import Dict
 from utilities import create_directory
 
@@ -19,6 +20,57 @@ class Dataset:
         self.data_dir = './data/datasets'
 
         create_directory(self.data_dir)
+
+
+    def get_dataset_details(
+                self, 
+                workspace_id: str = '',
+                dataset_id: str = '') -> Dict:
+        """
+        Get details of a specific dataset.
+
+        Args:
+            workspace_id (str, optional): workspace id to search datasets from.
+            dataset_id (str, optional): dataset id to search details from.
+
+        Returns:
+            Dict: status message and content.
+        """
+
+        # Main URL
+        request_url = f'{self.main_url}/groups/{workspace_id}/datasets/{dataset_id}'
+
+        # If workspace ID was not informed, return error message...
+        if workspace_id == '':
+            return {'message': 'Missing workspace id, please check.', 'content': ''}
+        if dataset_id == '':
+            return {'message': 'Missing dataset id, please check.', 'content': ''}
+
+        # If workspace ID was informed...
+        else: 
+            filename = f'datasets_{workspace_id}_{dataset_id}.xlsx'
+
+            # Make the request
+            r = requests.get(url=request_url, headers=self.headers)
+
+            # Get HTTP status and content
+            status = r.status_code
+            response = json.loads(r.content)
+
+            # If success...
+            if status == 200:
+                # Save to Excel file
+                df = pd.DataFrame([response])
+                df.to_excel(f'{self.data_dir}/{filename}', index=False)
+                
+                return {'message': 'Success', 'content': response}
+
+            else:                
+                # If any error happens, return message.
+                response = json.loads(r.content)
+                error_message = response['error']['message']
+
+                return {'message': {'error': error_message, 'content': response}}
 
 
     def list_datasets(
@@ -362,9 +414,9 @@ class Dataset:
         List all reports related to a specific dataset.
 
         Args:
-            workspace_id (str, optional): workspace id where dataset is published.
-            dataset_id (str, optional): dataset id to search reports from.
-            workspace (Workspace, optional): workspace object to list reports.
+            workspace_id (str): workspace id where dataset is published.
+            dataset_id (str): dataset id to search reports from.
+            workspace (Workspace): workspace object to list reports.
 
         Returns:
             Dict: status message and content.
@@ -377,7 +429,7 @@ class Dataset:
         os.makedirs(file_path, exist_ok=True)
         
         try:
-        
+
             workspace_reports = workspace.list_reports(workspace_id=workspace_id)
 
             for report in workspace_reports['content']:
@@ -392,3 +444,49 @@ class Dataset:
 
         except Exception as error_message:
             return {'message': {'error': error_message, 'content': dataset_reports}}
+
+
+    def export_dataset_related_reports(
+                self, 
+                workspace_id: str = '',
+                dataset_id: str = '',
+                replace_existing: bool = False,
+                workspace: workspace.Workspace = None,
+                report: report.Report = None) -> Dict:
+        """
+        Export all reports related to a specific dataset.
+
+        Args:
+            workspace_id (str): workspace id where dataset is published.
+            dataset_id (str): dataset id to search reports from.
+            replace_existing (bool, optional): replace existing files. Defaults to False.
+            workspace (Workspace): workspace object to list reports.
+
+        Returns:
+            Dict: status message and content.
+        """
+
+        dataset_details = self.get_dataset_details(workspace_id=workspace_id, dataset_id=dataset_id)
+        dataset_name = dataset_details['content']['name']
+
+        dataset_reports_list = self.list_dataset_related_reports(workspace_id=workspace_id, dataset_id=dataset_id, workspace=workspace)
+
+        if 'error' in dataset_reports_list['message']:
+            return dataset_reports_list
+
+        reports_to_export = []
+        for report_data in dataset_reports_list['content']:
+            if report_data['name'] != dataset_name:
+                reports_to_export.append(report_data)
+
+        print(f'Downloading {len(reports_to_export)} reports...')
+
+        for report_data in reports_to_export:
+            report.export_report(
+                workspace_id=workspace_id,
+                report_id=report_data['id'],
+                report_name=report_data['name'],
+                dataset_name=dataset_name,
+                replace_existing=replace_existing)
+
+        return {'message': 'Success', 'content': dataset_reports_list['content']}
