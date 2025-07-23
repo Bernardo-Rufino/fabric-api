@@ -71,6 +71,7 @@ class Report:
     def export_report(
                 self, 
                 workspace_id: str = '',
+                workspace_name: str = '',
                 report_id: str = '',
                 report_name: str = '',
                 dataset_name: str = '',
@@ -80,6 +81,7 @@ class Report:
 
         Args:
             workspace_id (str, optional): workspace id to search datasets from.
+            workspace_name (str, optional): workspace name to be associated with the report.
             report_id (str, optional): report id to be exported.
             report_name (str, optional): report name to be saved.
             dataset_name (str, optional): dataset name to be associated with the report.
@@ -101,7 +103,7 @@ class Report:
         # If workspace ID and report ID were informed...
         else: 
             filename = f'{report_name}.pbix'
-            file_path = f'{self.data_dir}/exports/{dataset_name}'
+            file_path = f'{self.data_dir}/exports/{workspace_name}/{dataset_name}'
 
             create_directory(file_path)
 
