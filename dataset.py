@@ -466,6 +466,9 @@ class Dataset:
             Dict: status message and content.
         """
 
+        workspace_details = workspace.get_workspace_details(workspace_id=workspace_id)
+        workspace_name = workspace_details['content']['name']
+
         dataset_details = self.get_dataset_details(workspace_id=workspace_id, dataset_id=dataset_id)
         dataset_name = dataset_details['content']['name']
 
@@ -484,9 +487,10 @@ class Dataset:
         for report_data in reports_to_export:
             report.export_report(
                 workspace_id=workspace_id,
+                workspace_name=workspace_name,
+                dataset_name=dataset_name,
                 report_id=report_data['id'],
                 report_name=report_data['name'],
-                dataset_name=dataset_name,
                 replace_existing=replace_existing)
 
         return {'message': 'Success', 'content': dataset_reports_list['content']}
