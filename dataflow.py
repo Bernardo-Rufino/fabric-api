@@ -19,6 +19,7 @@ class Dataflow:
         self.fabric_api_base_url = 'https://api.fabric.microsoft.com'
         self.token = token
         self.headers = {'Authorization': f'Bearer {self.token}'}
+        self.workspace = Workspace(self.token)
 
         # Directories
         self.dataflows_dir = './data/dataflows'
@@ -28,7 +29,7 @@ class Dataflow:
             create_directory(dir)
 
 
-    def list_dataflows(self, workspace_id: str = '') -> Dict:
+    def list_dataflows(self, workspace_id: str = '', type: str = 'pbi') -> Dict:
         """
         List all dataflows in a workspace_id that the user has access to.
 
@@ -38,39 +39,50 @@ class Dataflow:
         Returns:
             Dict: status message and content.
         """
-        # Main URL
-        request_url = self.main_url + '/groups'
-
         # If workspace ID was not informed, return error message...
         if workspace_id == '':
             return {'message': 'Missing workspace id, please check.', 'content': ''}
-
-        # If workspace ID was informed...
+        
+        if type not in ('pbi', 'fabric'):
+            return {'message': 'Type must be "pbi" or "fabric".', 'content': ''}
+        
+        # Main URL
+        elif type == 'pbi':
+            request_url = f'{self.main_url}/groups/{workspace_id}/dataflows'
+        elif type == 'fabric':
+            request_url = f'{self.fabric_api_base_url}/v1/workspaces/{workspace_id}/dataflows'
         else:
-            request_url = f'{request_url}/{workspace_id}/dataflows'
-            filename = f'dataflows_{workspace_id}.xlsx'
+            return {'message': 'Type must be "pbi" or "fabric".', 'content': ''} # Just as fallback, it won't reach here.
 
-            # Make the request
-            r = requests.get(url=request_url, headers=self.headers)
+        workspace_name = self.workspace.get_workspace_details(workspace_id).get('content', {}).get('name', 'notFound')
+        filename = f'dataflows_{workspace_name}.xlsx'
 
-            # Get HTTP status and content
-            status = r.status_code
-            response = json.loads(r.content).get('value', '')
+        # Make the request
+        r = requests.get(url=request_url, headers=self.headers)
 
-            # If success...
-            if status == 200:
-                # Save to Excel file
+        # Get HTTP status and content
+        status = r.status_code
+        response = json.loads(r.content).get('value', '')
+
+        # If success...
+        if status == 200:
+            if type == 'fabric':
+                df = pd.json_normalize(response)
+                df['name'] = df['displayName']
+                df.drop(columns=['displayName'], inplace=True)
+            else:
                 df = pd.DataFrame(response)
-                # df.to_excel(f'{self.dataflows_dir}/{filename}', index=False)
-                
-                return {'message': 'Success', 'content': response}
+            df.to_excel(f'{self.dataflows_dir}/{filename}', index=False)
+            result = json.loads(df.to_json(orient='records'))
 
-            else:                
-                # If any error happens, return message.
-                response = json.loads(r.content)
-                error_message = response['error']['message']
+            return {'message': 'Success', 'content': result}
 
-                return {'message': {'error': error_message, 'content': response}}
+        else:                
+            # If any error happens, return message.
+            response = json.loads(r.content)
+            error_message = response['error']['message']
+
+            return {'message': {'error': error_message, 'content': response}}
             
 
     def get_dataflow_details(self, workspace_id: str = '', dataflow_id: str = '', folder_name: str = '') -> Dict:
@@ -130,7 +142,7 @@ class Dataflow:
                 workspace_id: str = '', 
                 dataflow_content: Dict = '') -> Dict:
         """
-        Add an user to a workspace.
+        Creates a new Power BI dataflow in a specified workspace.
 
         Args:
             workspace_id (str): workspace id where dataflow will be created.
@@ -180,11 +192,11 @@ class Dataflow:
                     workspace_id: str = '', 
                     dataflow_id: str = '') -> Dict:
             """
-            Add an user to a workspace.
+            Deletes a Power BI dataflow from a specified workspace.
 
             Args:
-                workspace_id (str): workspace id where dataflow will be created.
-                dataflow_content (Dict): dataflow json with all details from it.
+                workspace_id (str): workspace id where dataflow will be deleted.
+                dataflow_id (str): dataflow id to be deleted.
 
             Returns:
                 Dict: status message.
@@ -223,11 +235,12 @@ class Dataflow:
 
     def export_dataflow_json(self, workspace_id: str = '', dataflow_id: str = '', dataflow_name: str = '') -> Dict:
         """
-        Get all details from a specific dataflows in a workspace_id that the user has access to.
+        Exports the JSON definition of a Power BI dataflow.
 
         Args:
-            workspace_id (str, optional): workspace id to search for.
+            workspace_id (str, optional): workspace id where the dataflow resides.
             dataflow_id (str, optional): dataflow id to get the details.
+            dataflow_name (str, optional): name to save the exported JSON file.
 
         Returns:
             Dict: status message and content.
@@ -267,7 +280,6 @@ class Dataflow:
                 error_message = response['error']['message']
 
                 return {'message': {'error': error_message, 'content': response}}
-            
 
     def get_dataflow_gen2_definition(self, workspace_id: str, dataflow_id: str) -> Dict:
         """
