@@ -1,45 +1,59 @@
 import os
-import pyodbc
-from dotenv import load_dotenv
-
-# Load environment variables (or from somewhere else)
-load_dotenv('./utils/.env')
-
-client_id = os.environ.get('CLIENT_ID', '')
-client_secret = os.environ.get('CLIENT_SECRET', '')
-
-def connect_to_server(server: str, database: str, client_id: str, client_secret: str) -> pyodbc.Connection:
-    connection_string = (
-        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER={server};"
-        f"DATABASE={database};"
-        f"Authentication=ActiveDirectoryServicePrincipal;"
-        f"UID={client_id};PWD={client_secret}"
-    )
-    try:
-        connection = pyodbc.connect(connection_string)
-        return connection
-    except pyodbc.Error as e:
-        print("Error while connecting to SQL Server:", e)
-        raise
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 
-if __name__ == '__main__':
+class Lakehouse:
 
-    # Parameters
-    server = "your_sql_server.database.windows.net"
-    database = "your_database_name"
+    def __init__(self, server: str, database: str, client_id: str, client_secret: str):
+        self.server = server
+        self.database = database
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.data_dir = f'./data/lakehouse/{database}'
 
-    # Connect to SQL Server
-    connection = connect_to_server(server, database, client_id, client_secret)
+    
+    def __create_sqlalchemy_engine(self):
+        """
+        Creates a SQLAlchemy engine for a SQL Server database using Active Directory Service Principal authentication.
+        """
+        connection_string = (
+            f"mssql+pyodbc:///?odbc_connect="
+            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+            f"SERVER={self.server};"
+            f"DATABASE={self.database};"
+            f"Authentication=ActiveDirectoryServicePrincipal;"
+            f"UID={self.client_id};"
+            f"PWD={self.client_secret}"
+        )
+        
+        try:
+            # Create the SQLAlchemy engine
+            engine = create_engine(connection_string)
+            return engine
+        except SQLAlchemyError as e:
+            print("Error while creating the SQLAlchemy engine:", e)
+            raise
 
-    # Use the connection
-    cursor = connection.cursor()
-    cursor.execute("SELECT TOP 10 * FROM your_table_name")
-    rows = cursor.fetchall()
-    for row in rows:
-        print(row)
 
-    # Close the connection
-    cursor.close()
-    connection.close()
+    def execute_query(self, query: str):
+
+        # Create the SQLAlchemy engine
+        engine = self.__create_sqlalchemy_engine()
+
+        try:
+            # Use a 'with' block to ensure the connection is closed
+            with engine.connect() as connection:
+                df = pd.read_sql(query, connection)
+
+                current_timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+
+                os.makedirs(f'{self.data_dir}/{self.database}', exist_ok=True)
+                df.to_csv(f'{self.data_dir}/{self.database}/query_result_{current_timestamp}.csv', index=False, encoding='utf-8-sig')
+                list_of_dicts = df.to_dict(orient='records')
+
+                return {'message': 'Success', 'content': {'rows': list_of_dicts}}
+
+        except (SQLAlchemyError, ConnectionError) as e:
+            return {'message': 'Error', 'content': str(e)}
