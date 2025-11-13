@@ -61,6 +61,8 @@ class Auth:
             scope = 'https://analysis.windows.net/powerbi/api/.default'
         elif service == 'fabric':
             scope = 'https://api.fabric.microsoft.com/.default'
+        elif service == 'azure':
+            scope = 'https://management.azure.com/.default'
         else:
             raise ValueError("Invalid service specified. Choose 'pbi' or 'fabric'.")
 
