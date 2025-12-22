@@ -52,7 +52,7 @@ class Auth:
         Authenticates interactively (user account).
 
         Args:
-            service (str, optional): which service to get token to: pbi, fabric, azure or graph.
+            service (str, optional): which service to get token to: pbi, fabric or azure.
 
         Returns:
             str: token for authorization.
@@ -63,10 +63,8 @@ class Auth:
             scope = 'https://api.fabric.microsoft.com/.default'
         elif service == 'azure':
             scope = 'https://management.azure.com/.default'
-        elif service == 'graph':
-            scope = 'https://graph.microsoft.com/.default'
         else:
-            raise ValueError("Invalid service specified. Choose 'pbi' or 'fabric'.")
+            raise ValueError("Invalid service specified. Choose 'pbi', 'fabric' or'azure'.")
 
         auth = InteractiveBrowserCredential(cache_persistence_options=TokenCachePersistenceOptions())
 
