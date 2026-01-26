@@ -188,7 +188,8 @@ class Dataflow:
     def delete_dataflow(
                     self, 
                     workspace_id: str = '', 
-                    dataflow_id: str = '') -> Dict:
+                    dataflow_id: str = '',
+                    type: str = 'pbi') -> Dict:
             """
             Deletes a Power BI dataflow from a specified workspace.
 
@@ -199,36 +200,49 @@ class Dataflow:
             Returns:
                 Dict: status message.
             """
+            # If workspace ID was not informed, return error message...
+            if workspace_id == '':
+                return {'message': 'Missing workspace id, please check.', 'content': ''}
+            
+            # If dataflow ID was not informed, return error message...
+            if dataflow_id == '':
+                return {'message': 'Missing dataflow id, please check.', 'content': ''}
+            
 
-            # If both, user and workspace if are provided...
-            if (dataflow_id != '') & (workspace_id != ''):
-
-                request_url = self.main_url + f'/groups/{workspace_id}/dataflows/{dataflow_id}'
-               
-                # Make the request
-                r = requests.delete(url=request_url, headers=self.headers)
-
-                # Get HTTP status and content
-                status = r.status_code
-
-                # If success...
-                if status in (200, 202):
-                    return {'message': 'Success'}
-                
-                else:                
-                    
-                    try:
-                        # If any error happens, return message.
-                        response = json.loads(r.content)
-                        error_message = response['error']
-
-                    except:
-                        return {'message': 'Error reading JSON response'}
-                    
-                    return {'message': {'error': error_message, 'content': response}}
-
+            if type not in ('pbi', 'fabric'):
+                return {'message': 'Type must be "pbi" or "fabric".', 'content': ''}
+            
+            # Main URL
+            elif type == 'pbi':
+                request_url = f'{self.main_url}/groups/{workspace_id}/dataflows/{dataflow_id}'
+            elif type == 'fabric':
+                request_url = f'{self.fabric_api_base_url}/v1/workspaces/{workspace_id}/dataflows/{dataflow_id}'
             else:
-                return {'message': 'Missing parameters, please check.'}
+                return {'message': 'Type must be "pbi" or "fabric".', 'content': ''} # Just as fallback, it won't reach here.
+
+            
+            # Make the request
+            r = requests.delete(url=request_url, headers=self.headers)
+
+            # Get HTTP status and content
+            status = r.status_code
+
+            # If success...
+            if status in (200, 202):
+                return {'message': 'Success'}
+            
+            else:                
+                
+                try:
+                    # If any error happens, return message.
+                    print(r.text)
+                    response = json.loads(r.content)
+                    error_message = response['error']
+
+                except:
+                    return {'message': 'Error reading JSON response'}
+                
+                return {'message': {'error': error_message, 'content': response}}
             
 
     def export_dataflow_json(self, workspace_id: str = '', dataflow_id: str = '', dataflow_name: str = '') -> Dict:
