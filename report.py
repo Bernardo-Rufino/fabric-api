@@ -663,8 +663,9 @@ class Report:
         # Identify model-level dependencies
         model_measures = self._get_model_measure_references(measures)
 
-        # Generate DAX Query View script
+        # Generate scripts
         dax_script = self._generate_dax_query_script(measures)
+        tmdl_script = self._generate_tmdl_script(measures)
 
         # Save files
         report_name = self.get_report_name(workspace_id, report_id).replace(' ', '').replace('(', '').replace(')', '').strip()
@@ -675,6 +676,11 @@ class Report:
         dax_path = f'{output_dir}/{report_name}_measures.txt'
         with open(dax_path, 'w', encoding='utf-8') as f:
             f.write(dax_script)
+
+        # Save TMDL script (.tmdl)
+        tmdl_path = f'{output_dir}/{report_name}_measures.tmdl'
+        with open(tmdl_path, 'w', encoding='utf-8') as f:
+            f.write(tmdl_script)
 
         # Save measures list (.json)
         json_path = f'{output_dir}/{report_name}_measures.json'
@@ -688,6 +694,7 @@ class Report:
         print(f'Measures extracted: {len(measures)}')
         print(f'Model dependencies: {len(model_measures)}')
         print(f'DAX script saved to: {dax_path}')
+        print(f'TMDL script saved to: {tmdl_path}')
         print(f'Measures JSON saved to: {json_path}')
 
         return {
@@ -697,6 +704,8 @@ class Report:
                 'model_measures': model_measures,
                 'dax_script': dax_script,
                 'dax_script_path': dax_path,
+                'tmdl_script': tmdl_script,
+                'tmdl_script_path': tmdl_path,
                 'measures_json_path': json_path
             }
         }
@@ -834,6 +843,66 @@ class Report:
                 lines.append(item)
 
         lines.append('    )')
+
+        return '\n'.join(lines) + '\n'
+
+
+    def _generate_tmdl_script(self, measures: List[Dict[str, Any]]) -> str:
+        """
+        Generate a TMDL (Tabular Model Definition Language) script from
+        report-level measures using the createOrReplace command.
+
+        Measures are grouped by entity (table). The output follows the
+        TMDL script format used by Analysis Services / Fabric semantic models.
+
+        Args:
+            measures (list): parsed measure list from _parse_report_extensions.
+
+        Returns:
+            str: complete TMDL script.
+        """
+        # Group measures by entity
+        entities = {}
+        for m in measures:
+            entity = m['entity']
+            if entity not in entities:
+                entities[entity] = []
+            entities[entity].append(m)
+
+        lines = ['createOrReplace']
+
+        for entity_name, entity_measures in entities.items():
+            lines.append('')
+            lines.append(f'\tref table {entity_name}')
+
+            for m in entity_measures:
+                lines.append('')
+
+                # Description as TMDL doc comment
+                description = m.get('description', '')
+                if description:
+                    lines.append(f'\t\t/// {description}')
+
+                name = m['name']
+                expression = m['expression']
+                expr_lines = expression.split('\n')
+
+                # Single-line vs multi-line expression
+                if len(expr_lines) == 1:
+                    lines.append(f"\t\tmeasure '{name}' = {expression}")
+                else:
+                    lines.append(f"\t\tmeasure '{name}' =")
+                    for eline in expr_lines:
+                        lines.append(f'\t\t\t\t{eline}')
+
+                # Properties
+                format_string = m.get('formatString', '')
+                if format_string:
+                    lines.append(f'\t\t\tformatString: {format_string}')
+
+                display_folder = m.get('displayFolder', '')
+                if display_folder:
+                    lines.append(f'\t\t\tdisplayFolder: {display_folder}')
 
         return '\n'.join(lines) + '\n'
 
