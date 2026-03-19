@@ -30,6 +30,11 @@ Repository = "https://github.com/Bernardo-Rufino/fabric-api"
 [tool.poetry]
 packages = [{include = "fabric_api"}]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that require live Fabric API access (deselect with '-m \"not integration\"')",
+]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
