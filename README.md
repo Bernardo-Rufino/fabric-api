@@ -310,6 +310,8 @@ for m in matches['content']:
 ```
 
 > **Note:** For CI/CD dataflows, `mode='replace'` updates in-place (same ID), so no pipeline updates are needed. Use `mode='create'` to keep the original untouched and create a new dataflow with a `_cicd` suffix instead.
+| `get_pipeline_definition(workspace_id, pipeline_id)` | Get the full definition of a Fabric Data Pipeline. |
+| `get_pipeline_activities(workspace_id, pipeline_id)` | Get the list of activities from a pipeline with name, type, and typeProperties. |
 
 ### Database
 
