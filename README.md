@@ -111,12 +111,13 @@ Manage Power BI workspaces, users, and permissions.
 
 ### Dataset
 
-Manage datasets, permissions, and execute DAX queries.
+Manage datasets (semantic models), permissions, and execute DAX queries.
 
 | Method | Description |
 |---|---|
 | `list_datasets(workspace_id)` | List all datasets in a workspace. |
 | `get_dataset_details(workspace_id, dataset_id)` | Get details of a specific dataset. |
+| `get_dataset_name(workspace_id, dataset_id)` | Resolve the display name of a dataset. Tries the PBI API first, falls back to the Fabric semantic models API. |
 | `execute_query(workspace_id, dataset_id, query)` | Execute a DAX query against a dataset. Runs a COUNTROWS pre-check to detect if API row/value limits would truncate the result and returns truncation metadata. |
 | `list_users(workspace_id, dataset_id)` | List users with access to a dataset. |
 | `add_user(user_principal_name, workspace_id, dataset_id, access_right)` | Grant a user access to a dataset. |
@@ -149,6 +150,7 @@ Manage Power BI and Fabric dataflows, including Gen1, Gen2, and Gen2 CI/CD.
 |---|---|
 | `list_dataflows(workspace_id)` | List all dataflows in a workspace (Gen1, Gen2 standard, and Gen2 CI/CD). Results are merged and deduplicated with a `source` column. |
 | `get_dataflow_details(workspace_id, dataflow_id)` | Get details of a specific dataflow. |
+| `get_dataflow_name(workspace_id, dataflow_id)` | Resolve the display name of a dataflow. Tries the PBI API first (Gen1 + Gen2 standard), falls back to the Fabric API (Gen2 CI/CD). |
 | `create_dataflow(workspace_id, dataflow_content)` | Create a new Power BI dataflow. |
 | `delete_dataflow(workspace_id, dataflow_id, type='pbi')` | Delete a dataflow. Use `type='fabric'` for Fabric API. |
 | `export_dataflow_json(workspace_id, dataflow_id, dataflow_name)` | Export a dataflow definition as JSON. |
@@ -261,6 +263,15 @@ Query Kusto (KQL) databases in Microsoft Fabric.
 |---|---|
 | `query_kql_database(kql_query, sort_by)` | Execute a KQL query and return results as a DataFrame. |
 
+### Notebook
+
+Manage Fabric notebooks.
+
+| Method | Description |
+|---|---|
+| `list_notebooks(workspace_id)` | List all notebooks in a workspace. |
+| `get_notebook(workspace_id, notebook_id)` | Get the metadata of a specific notebook. |
+
 ### Pipeline
 
 Manage Fabric Data Pipelines.
@@ -268,10 +279,11 @@ Manage Fabric Data Pipelines.
 | Method | Description |
 |---|---|
 | `list_pipelines(workspace_id)` | List all Fabric Data Pipelines in a workspace. |
+| `get_pipeline(workspace_id, pipeline_id)` | Get the metadata of a specific pipeline (not its definition). |
 | `get_pipeline_definition(workspace_id, pipeline_id)` | Get the full definition of a Fabric Data Pipeline. |
 | `update_pipeline_definition(workspace_id, pipeline_id, definition)` | Update an existing pipeline definition. |
-| `get_pipeline_activities(workspace_id, pipeline_id)` | Get the list of activities from a pipeline with name, type, and typeProperties. |
-| `find_pipelines_by_dataflow(workspace_id, dataflow_id)` | Find all pipelines in a workspace that reference a specific dataflow (via RefreshDataflow activities). Returns pipeline ID, name, and matching activity names. |
+| `get_pipeline_activities(workspace_id, pipeline_id_or_name)` | Get the list of activities from a pipeline. Accepts either a pipeline ID or display name. Returns `pipeline_id`, `pipeline_name`, `activity_name`, `activity_type`, and `typeProperties` for each activity. For RefreshDataflow, TridentNotebook, InvokePipeline, and DatasetRefresh activities, resolves the referenced object's display name as `object_name` inside `typeProperties`. |
+| `find_pipelines_by_dataflow(workspace_id, dataflow_id_or_name)` | Find all pipelines in a workspace that reference a specific dataflow. Accepts either a dataflow ID or display name. Returns pipeline ID, name, and matching activity names. |
 | `replace_dataflow_id_in_pipeline(workspace_id, pipeline_id, old_dataflow_id, new_dataflow_id)` | Replace a dataflow ID in all RefreshDataflow activities of a pipeline. Useful after recreating a dataflow with `change_data_destination(mode='replace')`. |
 
 #### Replacing a dataflow destination and updating pipelines
@@ -310,8 +322,6 @@ for m in matches['content']:
 ```
 
 > **Note:** For CI/CD dataflows, `mode='replace'` updates in-place (same ID), so no pipeline updates are needed. Use `mode='create'` to keep the original untouched and create a new dataflow with a `_cicd` suffix instead.
-| `get_pipeline_definition(workspace_id, pipeline_id)` | Get the full definition of a Fabric Data Pipeline. |
-| `get_pipeline_activities(workspace_id, pipeline_id)` | Get the list of activities from a pipeline with name, type, and typeProperties. |
 
 ### Database
 
