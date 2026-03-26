@@ -3,6 +3,7 @@ import re
 import copy
 import json
 import uuid
+import time
 import base64
 import requests
 import pandas as pd
@@ -31,6 +32,23 @@ class Dataflow:
             create_directory(dir)
 
 
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> requests.Response:
+        """
+        Makes an HTTP request with automatic retry on 429 (Too Many Requests).
+        Respects the Retry-After header when present.
+        """
+        for attempt in range(max_retries + 1):
+            response = requests.request(method, url, **kwargs)
+            if response.status_code != 429:
+                return response
+
+            retry_after = int(response.headers.get('Retry-After', 5))
+            print(f"  Rate limited (429). Retrying in {retry_after}s... (attempt {attempt + 1}/{max_retries})")
+            time.sleep(retry_after)
+
+        return response
+
+
     def _get_dataflow_pbi_definition(self, workspace_id: str, dataflow_id: str) -> Dict:
         """
         Fetches a dataflow definition from the Power BI REST API.
@@ -50,7 +68,7 @@ class Dataflow:
             return {'message': 'Missing dataflow id, please check.', 'content': ''}
 
         request_url = f'{self.main_url}/groups/{workspace_id}/dataflows/{dataflow_id}'
-        r = requests.get(url=request_url, headers=self.headers)
+        r = self._request_with_retry('GET', request_url, headers=self.headers)
 
         if r.status_code == 200:
             return {'message': 'Success', 'content': json.loads(r.content)}
@@ -61,6 +79,33 @@ class Dataflow:
             except Exception:
                 error_message = r.text
             return {'message': {'error': error_message, 'status_code': r.status_code}}
+
+
+    def get_dataflow_name(self, workspace_id: str, dataflow_id: str) -> str:
+        """
+        Resolves the display name of a dataflow by its ID.
+        Tries the Power BI API first (Gen1 + Gen2 standard), then falls back
+        to the Fabric API (Gen2 CI/CD).
+
+        Args:
+            workspace_id (str): The workspace ID.
+            dataflow_id (str): The dataflow ID.
+
+        Returns:
+            str: The dataflow display name, or empty string if not found.
+        """
+        # Try PBI API first (covers Gen1 and Gen2 non-CI/CD)
+        result = self._get_dataflow_pbi_definition(workspace_id, dataflow_id)
+        if result.get('message') == 'Success':
+            return result['content'].get('name', '')
+
+        # Fall back to Fabric API (Gen2 CI/CD)
+        api_url = f'{self.fabric_api_base_url}/v1/workspaces/{workspace_id}/dataflows/{dataflow_id}'
+        response = self._request_with_retry('GET', api_url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json().get('displayName', '')
+
+        return ''
 
 
     def list_dataflows(self, workspace_id: str = '') -> Dict:
@@ -85,7 +130,7 @@ class Dataflow:
 
         # Fetch from PBI API (Gen1 + Gen2 standard)
         pbi_url = f'{self.main_url}/groups/{workspace_id}/dataflows'
-        pbi_response = requests.get(url=pbi_url, headers=self.headers)
+        pbi_response = self._request_with_retry('GET', pbi_url, headers=self.headers)
 
         pbi_records = []
         if pbi_response.status_code == 200:
@@ -100,7 +145,7 @@ class Dataflow:
 
         # Fetch from Fabric API (Gen2 CI/CD)
         fabric_url = f'{self.fabric_api_base_url}/v1/workspaces/{workspace_id}/dataflows'
-        fabric_response = requests.get(url=fabric_url, headers=self.headers)
+        fabric_response = self._request_with_retry('GET', fabric_url, headers=self.headers)
 
         fabric_records = []
         if fabric_response.status_code == 200:

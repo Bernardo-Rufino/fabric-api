@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import requests
 import pandas as pd
 from . import workspace
@@ -16,11 +17,56 @@ class Dataset:
         Initialize variables.
         """
         self.main_url = 'https://api.powerbi.com/v1.0/myorg'
+        self.fabric_api_base_url = 'https://api.fabric.microsoft.com'
         self.token = token
         self.headers = {'Authorization': f'Bearer {self.token}'}
         self.data_dir = './data/datasets'
 
         create_directory(self.data_dir)
+
+
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> requests.Response:
+        """
+        Makes an HTTP request with automatic retry on 429 (Too Many Requests).
+        Respects the Retry-After header when present.
+        """
+        for attempt in range(max_retries + 1):
+            response = requests.request(method, url, **kwargs)
+            if response.status_code != 429:
+                return response
+
+            retry_after = int(response.headers.get('Retry-After', 5))
+            print(f"  Rate limited (429). Retrying in {retry_after}s... (attempt {attempt + 1}/{max_retries})")
+            time.sleep(retry_after)
+
+        return response
+
+
+    def get_dataset_name(self, workspace_id: str, dataset_id: str) -> str:
+        """
+        Resolves the display name of a dataset (semantic model) by its ID.
+        Tries the Power BI API first, then falls back to the Fabric API.
+
+        Args:
+            workspace_id (str): The workspace ID.
+            dataset_id (str): The dataset ID.
+
+        Returns:
+            str: The dataset display name, or empty string if not found.
+        """
+        # Try PBI API first
+        request_url = f'{self.main_url}/groups/{workspace_id}/datasets/{dataset_id}'
+        response = self._request_with_retry('GET', request_url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json().get('name', '')
+
+        # Fall back to Fabric API
+        api_url = f'{self.fabric_api_base_url}/v1/workspaces/{workspace_id}/semanticModels/{dataset_id}'
+        response = self._request_with_retry('GET', api_url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json().get('displayName', '')
+
+        return ''
 
 
     def get_dataset_details(

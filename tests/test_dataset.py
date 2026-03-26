@@ -22,6 +22,7 @@ class MockDataset(Dataset):
     """Dataset instance that skips __init__ I/O (token, dirs)."""
     def __init__(self):
         self.main_url = 'https://api.powerbi.com/v1.0/myorg'
+        self.fabric_api_base_url = 'https://api.fabric.microsoft.com'
         self.token = 'fake-token'
         self.headers = {'Authorization': f'Bearer {self.token}'}
 
@@ -36,6 +37,9 @@ def _make_api_response(status_code, body):
     resp = MagicMock()
     resp.status_code = status_code
     resp.content = json.dumps(body).encode('utf-8')
+    resp.json.return_value = body
+    resp.text = json.dumps(body)
+    resp.headers = {'content-type': 'application/json'}
     return resp
 
 
@@ -252,3 +256,54 @@ class TestDatasetParameterValidation:
     def test_list_datasets_missing_workspace(self, ds):
         result = ds.list_datasets(workspace_id='')
         assert 'Missing workspace id' in result['message']
+
+
+# ===========================================================================
+# get_dataset_name
+# ===========================================================================
+
+class TestGetDatasetName:
+
+    @patch('fabric_api.dataset.requests.request')
+    def test_returns_name_from_pbi_api(self, mock_req, ds):
+        mock_req.return_value = _make_api_response(200, {'name': 'Sales Model'})
+
+        name = ds.get_dataset_name('ws-1', 'ds-1')
+
+        assert name == 'Sales Model'
+        assert mock_req.call_count == 1
+
+    @patch('fabric_api.dataset.requests.request')
+    def test_falls_back_to_fabric_api(self, mock_req, ds):
+        pbi_error = _make_api_response(404, {'error': {'message': 'Not found'}})
+        fabric_success = _make_api_response(200, {'displayName': 'Fabric Model'})
+        mock_req.side_effect = [pbi_error, fabric_success]
+
+        name = ds.get_dataset_name('ws-1', 'ds-1')
+
+        assert name == 'Fabric Model'
+        assert mock_req.call_count == 2
+
+    @patch('fabric_api.dataset.requests.request')
+    def test_returns_empty_when_both_fail(self, mock_req, ds):
+        pbi_error = _make_api_response(404, {'error': {'message': 'Not found'}})
+        fabric_error = _make_api_response(404, {'error': {'message': 'Not found'}})
+        mock_req.side_effect = [pbi_error, fabric_error]
+
+        name = ds.get_dataset_name('ws-1', 'ds-999')
+
+        assert name == ''
+
+    @patch('fabric_api.dataset.time.sleep')
+    @patch('fabric_api.dataset.requests.request')
+    def test_retries_on_429(self, mock_req, mock_sleep, ds):
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.headers = {'Retry-After': '1'}
+        success = _make_api_response(200, {'name': 'Sales Model'})
+        mock_req.side_effect = [rate_limited, success]
+
+        name = ds.get_dataset_name('ws-1', 'ds-1')
+
+        assert name == 'Sales Model'
+        assert mock_sleep.called
