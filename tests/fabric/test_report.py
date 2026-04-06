@@ -8,6 +8,8 @@ Usage:
     pytest tests/test_report.py -v
 """
 
+import base64
+import json
 import pytest
 from msdev_kit.fabric.report import Report
 
@@ -163,6 +165,72 @@ SAMPLE_REPORT_JSON = {
         ]
     }
 }
+
+
+def _b64(obj):
+    """Encode a dict as InlineBase64 payload (matches Fabric API format)."""
+    return base64.b64encode(json.dumps(obj).encode()).decode()
+
+
+PBIR_PARTS = [
+    {
+        'path': 'definition/pages/pages.json',
+        'payload': _b64({'pageOrder': ['page1', 'page2']}),
+        'payloadType': 'InlineBase64',
+    },
+    {
+        'path': 'definition/pages/page1/page.json',
+        'payload': _b64({'name': 'page1', 'displayName': 'Overview'}),
+        'payloadType': 'InlineBase64',
+    },
+    {
+        'path': 'definition/pages/page1/visuals/vis001/visual.json',
+        'payload': _b64({
+            'name': 'vis001',
+            'visual': {
+                'visualType': 'barChart',
+                'objects': {
+                    'title': [{'properties': {'text': {'expr': {'Literal': {'Value': "'Revenue by Region'"}}}}}]
+                },
+            },
+        }),
+        'payloadType': 'InlineBase64',
+    },
+    {
+        'path': 'definition/pages/page1/visuals/vis002/visual.json',
+        'payload': _b64({
+            'name': 'vis002',
+            'visualGroup': {'displayName': 'Filter Panel'},
+        }),
+        'payloadType': 'InlineBase64',
+    },
+    {
+        'path': 'definition/pages/page1/visuals/vis003/visual.json',
+        'payload': _b64({
+            'name': 'vis003',
+            'visual': {'visualType': 'card', 'objects': {}},
+        }),
+        'payloadType': 'InlineBase64',
+    },
+    {
+        'path': 'definition/pages/page2/page.json',
+        'payload': _b64({'name': 'page2', 'displayName': 'Details'}),
+        'payloadType': 'InlineBase64',
+    },
+    {
+        'path': 'definition/pages/page2/visuals/vis004/visual.json',
+        'payload': _b64({
+            'name': 'vis004',
+            'visual': {
+                'visualType': 'tableEx',
+                'objects': {
+                    'title': [{'properties': {'text': {'expr': {'Literal': {'Value': "'Sales Table'"}}}}}]
+                },
+            },
+        }),
+        'payloadType': 'InlineBase64',
+    },
+]
 
 
 # ===========================================================================
@@ -439,4 +507,57 @@ class TestGetLegacyReportPagesAndVisuals:
 
     def test_invalid_json_returns_empty_df(self, rpt):
         df = rpt.get_legacy_report_pages_and_visuals('not valid json', 'ws-1', 'rpt-1')
+        assert len(df) == 0
+
+
+# ===========================================================================
+# get_pbir_report_pages_and_visuals
+# ===========================================================================
+
+class TestGetPbirReportPagesAndVisuals:
+
+    def _setup(self, rpt):
+        rpt.get_report_name = lambda ws, rid: 'TestReport'
+        rpt.data_dir = '/tmp/test_reports'
+        import os
+        os.makedirs(f'{rpt.data_dir}/pages_and_visuals', exist_ok=True)
+
+    def test_page_names(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals(PBIR_PARTS, 'ws-1', 'rpt-1')
+        assert sorted(df['pageName'].unique()) == ['Details', 'Overview']
+
+    def test_visual_count(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals(PBIR_PARTS, 'ws-1', 'rpt-1')
+        assert len(df) == 4  # 3 on page1, 1 on page2
+
+    def test_title_extracted_from_objects(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals(PBIR_PARTS, 'ws-1', 'rpt-1')
+        assert 'Revenue by Region' in df['title'].values
+
+    def test_visual_group_type_and_title(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals(PBIR_PARTS, 'ws-1', 'rpt-1')
+        group = df[df['type'] == 'Visual Group (Container)']
+        assert len(group) == 1
+        assert group.iloc[0]['title'] == 'Filter Panel'
+
+    def test_no_title_falls_back_to_type(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals(PBIR_PARTS, 'ws-1', 'rpt-1')
+        card = df[df['type'] == 'card']
+        assert len(card) == 1
+        assert card.iloc[0]['title'] == 'card'
+
+    def test_page_index_follows_page_order(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals(PBIR_PARTS, 'ws-1', 'rpt-1')
+        assert df[df['pageName'] == 'Overview']['pageIndex'].iloc[0] == 1
+        assert df[df['pageName'] == 'Details']['pageIndex'].iloc[0] == 2
+
+    def test_missing_pages_json_returns_empty_df(self, rpt):
+        self._setup(rpt)
+        df = rpt.get_pbir_report_pages_and_visuals([], 'ws-1', 'rpt-1')
         assert len(df) == 0
