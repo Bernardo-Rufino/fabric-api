@@ -561,3 +561,49 @@ class TestGetPbirReportPagesAndVisuals:
         self._setup(rpt)
         df = rpt.get_pbir_report_pages_and_visuals([], 'ws-1', 'rpt-1')
         assert len(df) == 0
+
+
+# ===========================================================================
+# get_report_pages_and_visuals — dispatcher
+# ===========================================================================
+
+class TestGetReportPagesAndVisuals:
+
+    def _setup(self, rpt):
+        rpt.get_report_name = lambda ws, rid: 'TestReport'
+        rpt.data_dir = '/tmp/test_reports'
+        import os
+        os.makedirs(f'{rpt.data_dir}/pages_and_visuals', exist_ok=True)
+
+    def test_pbir_format_routes_to_pbir_parser(self, rpt):
+        self._setup(rpt)
+        definition = {'format': 'PBIR', 'parts': PBIR_PARTS}
+        df = rpt.get_report_pages_and_visuals(definition, 'ws-1', 'rpt-1')
+        assert len(df) == 4
+        assert 'Overview' in df['pageName'].values
+
+    def test_pbir_legacy_format_routes_to_legacy_parser(self, rpt):
+        self._setup(rpt)
+        report_json_payload = base64.b64encode(
+            json.dumps(SAMPLE_REPORT_JSON).encode()
+        ).decode()
+        definition = {
+            'format': 'PBIR-Legacy',
+            'parts': [
+                {'path': 'report.json', 'payload': report_json_payload, 'payloadType': 'InlineBase64'}
+            ],
+        }
+        df = rpt.get_report_pages_and_visuals(definition, 'ws-1', 'rpt-1')
+        assert len(df) == 4
+        assert 'Overview' in df['pageName'].values
+
+    def test_format_check_is_case_insensitive(self, rpt):
+        self._setup(rpt)
+        definition = {'format': 'pbir', 'parts': PBIR_PARTS}
+        df = rpt.get_report_pages_and_visuals(definition, 'ws-1', 'rpt-1')
+        assert len(df) == 4
+
+    def test_unknown_format_returns_empty_df(self, rpt):
+        definition = {'format': 'unsupported', 'parts': []}
+        df = rpt.get_report_pages_and_visuals(definition, 'ws-1', 'rpt-1')
+        assert len(df) == 0

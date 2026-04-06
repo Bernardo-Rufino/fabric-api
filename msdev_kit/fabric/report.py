@@ -438,6 +438,54 @@ class Report:
         return df
 
 
+    def get_report_pages_and_visuals(
+            self,
+            report_definition: Dict,
+            workspace_id: str,
+            report_id: str) -> pd.DataFrame:
+        """
+        Dispatcher. Detects the report format and delegates to the appropriate
+        pages-and-visuals parser.
+
+        Args:
+            report_definition (dict): dict with 'format' and 'parts' keys, as
+                returned by report_content['definition'] from the Fabric API.
+            workspace_id (str): workspace id.
+            report_id (str): report id.
+
+        Returns:
+            pd.DataFrame: one row per visual. Empty DataFrame for unknown formats.
+        """
+        fmt = report_definition.get('format', '').lower()
+        parts = report_definition.get('parts', [])
+
+        if fmt == 'pbir':
+            return self.get_pbir_report_pages_and_visuals(parts, workspace_id, report_id)
+
+        elif fmt == 'pbir-legacy':
+            report_payload = None
+            for part in parts:
+                if part.get('path') == 'report.json':
+                    report_payload = part.get('payload')
+                    break
+
+            if not report_payload:
+                print('get_report_pages_and_visuals: report.json not found in PBIR-Legacy parts.')
+                return pd.DataFrame()
+
+            decoded = base64.b64decode(report_payload).decode('utf-8')
+            json_data = json.loads(decoded)
+
+            if isinstance(json_data.get('config'), str):
+                json_data['config'] = json.loads(json_data['config'])
+
+            return self.get_legacy_report_pages_and_visuals(json_data, workspace_id, report_id)
+
+        else:
+            print(f'get_report_pages_and_visuals: unsupported format "{fmt}".')
+            return pd.DataFrame()
+
+
     def get_legacy_report_json(
                 self,
                 workspace_id: str = '',
