@@ -335,6 +335,123 @@ class Report:
         return df
 
 
+    def get_pbir_report_pages_and_visuals(
+                self,
+                parts: List[Dict],
+                workspace_id: str,
+                report_id: str) -> pd.DataFrame:
+        """
+        Parses a PBIR report definition's parts array to extract pages and visual
+        details, and returns the result as a Pandas DataFrame.
+
+        Args:
+            parts (list): the 'parts' list from the Fabric API definition response
+                (report_content['definition']['parts']).
+            workspace_id (str): workspace id.
+            report_id (str): report id.
+
+        Returns:
+            pd.DataFrame: one row per visual with columns report_id, pageIndex,
+                pageName, visual_id, type, title, title_expression.
+        """
+        def get_nested_value(data: dict, path: List[Any], default: Any = None) -> Any:
+            current = data
+            for key in path:
+                if isinstance(current, dict):
+                    current = current.get(key)
+                elif isinstance(current, list) and isinstance(key, int) and len(current) > key:
+                    current = current[key]
+                else:
+                    return default
+                if current is None:
+                    return default
+            return current
+
+        title_paths = [
+            ['title', 0, 'properties', 'text', 'expr', 'Literal', 'Value'],
+            ['general', 0, 'properties', 'title', 'expr', 'Literal', 'Value'],
+            ['text', 0, 'properties', 'text', 'expr', 'Literal', 'Value'],
+            ['text', 1, 'properties', 'text', 'expr', 'Literal', 'Value'],
+        ]
+
+        # Index parts by path for O(1) lookup
+        parts_by_path = {p['path']: p for p in parts}
+
+        # Decode pages.json to get ordered page IDs
+        pages_meta_part = parts_by_path.get('definition/pages/pages.json')
+        if not pages_meta_part:
+            return pd.DataFrame()
+
+        pages_meta = json.loads(base64.b64decode(pages_meta_part['payload']).decode('utf-8'))
+        page_order = pages_meta.get('pageOrder', [])
+
+        report_records: List[Dict[str, Any]] = []
+
+        for page_index, page_id in enumerate(page_order, start=1):
+            page_part = parts_by_path.get(f'definition/pages/{page_id}/page.json')
+            if not page_part:
+                continue
+            page_data = json.loads(base64.b64decode(page_part['payload']).decode('utf-8'))
+            page_name = page_data.get('displayName', page_id)
+
+            prefix = f'definition/pages/{page_id}/visuals/'
+            visual_parts = [
+                p for p in parts
+                if p['path'].startswith(prefix) and p['path'].endswith('/visual.json')
+            ]
+
+            for vp in visual_parts:
+                vc = json.loads(base64.b64decode(vp['payload']).decode('utf-8'))
+                visual_id = vc.get('name', 'No ID')
+                visual_type = 'Unknown'
+                visual_title = 'No Title'
+                title_expression = None
+
+                visual_group = vc.get('visualGroup')
+                if visual_group:
+                    visual_type = 'Visual Group (Container)'
+                    visual_title = visual_group.get('displayName', 'Visual Group')
+                else:
+                    visual_data = vc.get('visual', {})
+                    visual_type = visual_data.get('visualType', 'Generic Visual')
+                    objects = visual_data.get('objects', {})
+
+                    found_title = 'No Title'
+                    for path in title_paths:
+                        title_value = get_nested_value(objects, path)
+                        if isinstance(title_value, str) and title_value:
+                            found_title = title_value.strip("'").replace('\'', "'")
+                            break
+
+                    visual_title = found_title if found_title != 'No Title' else visual_type
+
+                    if visual_title == visual_type:
+                        title_obj = get_nested_value(
+                            objects, ['title', 0, 'properties', 'text', 'expr']
+                        )
+                        if title_obj and not get_nested_value(title_obj, ['Literal', 'Value']):
+                            title_expression = str(title_obj)
+
+                report_records.append({
+                    'report_id': report_id,
+                    'pageIndex': page_index,
+                    'pageName': page_name,
+                    'visual_id': visual_id,
+                    'type': visual_type,
+                    'title': visual_title,
+                    'title_expression': title_expression,
+                })
+
+        report_name = (
+            self.get_report_name(workspace_id, report_id)
+            .replace(' ', '').replace('(', '').replace(')', '').strip()
+        )
+        df = pd.DataFrame(report_records)
+        df.sort_values(by=['pageIndex', 'title'], inplace=True)
+        df.to_excel(f'{self.data_dir}/pages_and_visuals/{report_name}.xlsx', index=False)
+        return df
+
+
     def get_legacy_report_json(
                 self,
                 workspace_id: str = '',
