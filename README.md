@@ -1,38 +1,26 @@
-# Power BI & Fabric API Wrapper
+# msdev-kit
 
-Python wrapper for the Power BI REST API and Microsoft Fabric API, designed to automate workspace management, dataset operations, report handling, dataflows, and more.
+Microsoft developer toolkit for Python: Fabric/Power BI, MS Graph (Entra), and SharePoint.
 
 ## Installation
 
 ### Install from PyPI (recommended)
 
 ```shell
-pip install fabric-api
-```
-
-To install a specific version:
-
-```shell
-pip install fabric-api==1.0.3
+pip install msdev-kit
 ```
 
 ### Install from GitHub
 
 ```shell
-pip install git+https://github.com/Bernardo-Rufino/fabric-api.git
-```
-
-To install a specific version/tag:
-
-```shell
-pip install git+https://github.com/Bernardo-Rufino/fabric-api.git@v1.0.0
+pip install git+https://github.com/Bernardo-Rufino/msdev-kit.git
 ```
 
 ### Install for local development
 
 ```shell
-git clone https://github.com/Bernardo-Rufino/fabric-api.git
-cd powerbi-api
+git clone https://github.com/Bernardo-Rufino/msdev-kit.git
+cd msdev-kit
 pip install -e .
 ```
 
@@ -43,58 +31,54 @@ pip install -e .
 - Python >= 3.10
 - An Azure app registration with a client ID and client secret
 
-## Setting Up
+## Getting Started
 
-1. **Install the package** (see above)
+### Authentication
 
-2. **Set up credentials** — choose one of the two options:
+All classes use a shared `Auth` object. You can use different service principals for different services:
 
-    **Option A – `.env` file** (local development): create a `utils/.env` file with your credentials. If you cloned the repo, you can copy the example:
+```python
+from msdev_kit import Auth
 
-    ```shell
-    cp utils/.env.example utils/.env
-    ```
+# service principal auth
+auth = Auth(tenant_id="...", client_id="...", client_secret="...")
 
-    Otherwise, create `utils/.env` manually:
+token = auth.get_token()             # Power BI API (default)
+token = auth.get_token('fabric')     # Fabric API
+token = auth.get_token('graph')      # MS Graph API
+token = auth.get_token('azure')      # Azure Management API
 
-    Then edit `utils/.env`:
+# interactive user auth
+token = auth.get_token_for_user('pbi')
+```
 
-    ```shell
-    TENANT_ID='<YOUR_TENANT_ID>'
-    CLIENT_ID='<YOUR_CLIENT_ID>'
-    CLIENT_SECRET='<YOUR_CLIENT_SECRET>'
-    CLIENT_ID_SHAREPOINT='<YOUR_SHAREPOINT_CLIENT_ID>'
-    CLIENT_SECRET_SHAREPOINT='<YOUR_SHAREPOINT_CLIENT_SECRET>'
-    AZURE_SUBSCRIPTION_ID='<YOUR_AZURE_SUBSCRIPTION_ID>'
-    AZURE_RESOURCE_GROUP_ID='<YOUR_AZURE_RESOURCE_GROUP_ID>'
-    FABRIC_SQL_ENDPOINT='<YOUR_FABRIC_SQL_ENDPOINT>'
-    FABRIC_DATABASE='<YOUR_FABRIC_DATABASE>'
-    ```
+### Credentials
 
-    **Option B – environment variables** (CI/CD, Docker, etc.): if the variables are already set in the environment, the `.env` file is skipped automatically — no extra setup needed.
+Set up credentials via environment variables or a `.env` file:
 
-3. **Authenticate**:
+```shell
+TENANT_ID='<YOUR_TENANT_ID>'
+CLIENT_ID='<YOUR_CLIENT_ID>'
+CLIENT_SECRET='<YOUR_CLIENT_SECRET>'
+```
 
-    ```python
-    from fabric_api import Auth
+---
 
-    auth = Auth(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
-    token = auth.get_token()            # Power BI API
-    fabric_token = auth.get_token('fabric')  # Fabric API
-    ```
+## Sub-packages
 
-## Modules
+### `msdev_kit.fabric` — Fabric & Power BI
 
-### Auth
+All existing Fabric/Power BI classes, accessed via the `fabric` sub-package:
 
-Authentication via Azure service principal or interactive user login.
+```python
+from msdev_kit.fabric import Workspace, Dataset, Report, Dataflow, Pipeline
+from msdev_kit import Auth
 
-| Method | Description |
-|---|---|
-| `get_token(service='pbi')` | Get a bearer token for Power BI (`pbi`) or Fabric (`fabric`) APIs using a service principal. |
-| `get_token_for_user(service='pbi')` | Get a bearer token via interactive user login. Supports `pbi`, `fabric`, and `azure` services. |
+auth = Auth(tenant_id, client_id, client_secret)
+ws = Workspace(auth.get_token('fabric'))
+```
 
-### Workspace
+#### Workspace
 
 Manage Power BI workspaces, users, and permissions.
 
@@ -109,7 +93,7 @@ Manage Power BI workspaces, users, and permissions.
 | `remove_user(user_principal_name, workspace_id)` | Remove a user from a workspace. |
 | `batch_update_user(user, workspaces_list)` | Batch update a user across multiple workspaces. |
 
-### Dataset
+#### Dataset
 
 Manage datasets (semantic models), permissions, and execute DAX queries.
 
@@ -126,7 +110,7 @@ Manage datasets (semantic models), permissions, and execute DAX queries.
 | `list_dataset_related_reports(workspace_id, dataset_id)` | List all reports linked to a dataset. |
 | `export_dataset_related_reports(workspace_id, dataset_id)` | Export all reports linked to a dataset as `.pbix` files. |
 
-### Report
+#### Report
 
 Retrieve report metadata, definitions, visuals, and report-level measures.
 
@@ -142,7 +126,7 @@ Retrieve report metadata, definitions, visuals, and report-level measures.
 | `get_report_measures(workspace_id, report_id, operations)` | Extract report-level measures and generate a DAX Query View script. Supports both PBIR and PBIR-Legacy formats. |
 | `rebind_report(workspace_id, report_id, new_dataset_id, new_dataset_workspace_id, admin, dataset)` | Rebind a report to a new dataset/semantic model and migrate Read access to the new dataset. |
 
-### Dataflow
+#### Dataflow
 
 Manage Power BI and Fabric dataflows, including Gen1, Gen2, and Gen2 CI/CD.
 
@@ -150,194 +134,103 @@ Manage Power BI and Fabric dataflows, including Gen1, Gen2, and Gen2 CI/CD.
 |---|---|
 | `list_dataflows(workspace_id)` | List all dataflows in a workspace (Gen1, Gen2 standard, and Gen2 CI/CD). Results are merged and deduplicated with a `source` column. |
 | `get_dataflow_details(workspace_id, dataflow_id)` | Get details of a specific dataflow. |
-| `get_dataflow_name(workspace_id, dataflow_id)` | Resolve the display name of a dataflow. Tries the PBI API first (Gen1 + Gen2 standard), falls back to the Fabric API (Gen2 CI/CD). |
+| `get_dataflow_name(workspace_id, dataflow_id)` | Resolve the display name of a dataflow. |
 | `create_dataflow(workspace_id, dataflow_content)` | Create a new Power BI dataflow. |
 | `delete_dataflow(workspace_id, dataflow_id, type='pbi')` | Delete a dataflow. Use `type='fabric'` for Fabric API. |
 | `export_dataflow_json(workspace_id, dataflow_id, dataflow_name)` | Export a dataflow definition as JSON. |
 | `get_dataflow_gen2_definition(workspace_id, dataflow_id)` | Get the definition of a Dataflow Gen2 CI/CD item. |
 | `create_dataflow_gen2_from_definition(workspace_id, display_name, definition)` | Create a Dataflow Gen2 CI/CD from a definition. |
 | `update_dataflow_gen2_from_definition(workspace_id, dataflow_id, display_name, definition)` | Update an existing Dataflow Gen2 CI/CD definition. |
-| `get_data_destinations(workspace_id, dataflow_id)` | Get the data destination details for each table in a dataflow: table name, destination type (Lakehouse/Warehouse), workspace ID, item ID, SQL schema, mapping type (Automatic/Manual), and column mappings (source/destination pairs). |
-| `change_data_destination(workspace_id, dataflow_id, destination_type, destination_workspace_id, destination_item_id, mode='preview', ...)` | Fetch the dataflow definition and change its data destination (Lakehouse ↔ Warehouse). `mode='preview'` returns the modified definition without saving, `mode='replace'` updates in-place (CI/CD) or deletes+recreates (standard), `mode='create'` creates a new dataflow with `_cicd` suffix keeping the original. |
-| `create_dataflow_with_new_destination(workspace_id, dataflow_id, destination_type, destination_workspace_id, destination_item_id, ...)` | Create a new Gen2 CI/CD dataflow from an existing one with a different data destination. Supports custom display name and target workspace. |
-| `upgrade_to_gen2_cicd(...)` | Upgrade a Gen1 or Gen2 (standard) dataflow to Gen2 CI/CD. See details below. |
+| `get_data_destinations(workspace_id, dataflow_id)` | Get the data destination details for each table in a dataflow. |
+| `change_data_destination(workspace_id, dataflow_id, destination_type, ...)` | Change a dataflow's data destination (Lakehouse/Warehouse). Supports `preview`, `replace`, and `create` modes. |
+| `create_dataflow_with_new_destination(workspace_id, dataflow_id, ...)` | Create a new Gen2 CI/CD dataflow from an existing one with a different data destination. |
+| `upgrade_to_gen2_cicd(...)` | Upgrade a Gen1 or Gen2 (standard) dataflow to Gen2 CI/CD. |
 
-#### `upgrade_to_gen2_cicd`
-
-Converts a Gen1 or Gen2 (standard) dataflow into a Gen2 CI/CD (native Fabric) artifact.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `workspace_id` | `str` | *required* | The workspace ID where the source dataflow resides. |
-| `dataflow_id` | `str` | *required* | The ID of the source dataflow to upgrade. |
-| `display_name` | `str` | `''` | Display name for the new artifact. If empty, Gen1 auto-generates a name (e.g. `original_copy1`); Gen2 appends `_cicd` to the original name. |
-| `description` | `str` | `''` | Description for the new artifact (Gen1 only). If empty, copies from the source. |
-| `destination_workspace_id` | `str` | `''` | Target workspace for the new artifact. If empty, creates in the same workspace as the source. |
-| `include_schedule` | `bool` | `False` | Whether to migrate the refresh schedule from the source (Gen1 only). The schedule is copied in a disabled state. |
-| `compute_engine_settings` | `Dict` | `None` | Compute engine settings for the new CI/CD dataflow (Gen2 only). See supported keys below. If not provided, `allowFastCopy` is derived from the source dataflow. |
-| `source_type` | `str` | `'gen1'` | Type of source dataflow: `'gen1'` or `'gen2'`. |
-
-**`compute_engine_settings` keys (Gen2 only):**
-
-| Key | Type | Description |
-|---|---|---|
-| `allowFastCopy` | `bool` | Enable/disable fast copy (staging). Auto-derived from source if not provided. |
-| `allowPartitionedCompute` | `bool` | Enable/disable partitioned compute. Defaults to `false` in Fabric. |
-| `allowModernEvaluationEngine` | `bool` | Enable/disable query evaluation (modern evaluation engine). Defaults to `false` in Fabric. |
-
-> **Note:** The "Allow combining data from multiple sources" privacy setting (`pbi:mashup.fastCombine`) is not part of the CI/CD definition format. It must be configured manually via the Fabric portal after creation.
-
-**Gen1 → Gen2 CI/CD:**
-Uses the Power BI [`saveAsNativeArtifact`](https://learn.microsoft.com/en-us/rest/api/power-bi/dataflows/save-dataflow-gen-one-as-dataflow-gen-two) API (preview). This handles connection format updates, sensitivity labels, and optionally migrates refresh schedules. Non-fatal warnings (e.g. `FailedToCopySchedule`, `ConnectionsUpdateFailed`) are returned in the `warnings` field without failing the operation.
-
-**Gen2 (standard) → Gen2 CI/CD:**
-Fetches the dataflow definition via the PBI API and converts it to the CI/CD format (`mashup.pq`, `queryMetadata.json`, `.platform`). The conversion transforms the M document (removes internal pipeline queries, adds `[StagingDefinition]` and `[DataDestinations]` annotations, simplifies `DataDestination` queries), builds the query metadata from `pbi:mashup` fields, and creates the artifact via the Fabric API.
-
-If the dataflow is already Gen2 CI/CD, it re-creates a copy with the given display name.
-
-**Example:**
-
-```python
-from fabric_api import Auth, Dataflow
-
-auth = Auth(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
-
-# Gen1 → Gen2 CI/CD
-df = Dataflow(auth.get_token('fabric'))
-result = df.upgrade_to_gen2_cicd(
-    workspace_id='<workspace_id>',
-    dataflow_id='<gen1_dataflow_id>',
-    display_name='my_dataflow_cicd',
-    include_schedule=True,
-    source_type='gen1'
-)
-
-# Gen2 (standard) → Gen2 CI/CD with compute settings
-result = df.upgrade_to_gen2_cicd(
-    workspace_id='<source_workspace_id>',
-    dataflow_id='<gen2_dataflow_id>',
-    destination_workspace_id='<target_workspace_id>',
-    source_type='gen2',
-    compute_engine_settings={
-        'allowFastCopy': False,
-        'allowPartitionedCompute': True,
-        'allowModernEvaluationEngine': True
-    }
-)
-```
-
-### Capacity
-
-Monitor and manage Power BI and Fabric capacities.
-
-| Method | Description |
-|---|---|
-| `list_powerbi_capacities()` | List all Power BI capacities the user has access to. |
-| `list_fabric_capacities(azure_subscription_id, azure_resource_group)` | List Fabric capacities for a given Azure subscription. |
-| `assign_workspace_to_capacity(workspace_id, capacity_id)` | Assign a workspace to a capacity. |
-
-### Operations
-
-Track long-running Fabric API operations.
-
-| Method | Description |
-|---|---|
-| `get_operation_state(operation_id)` | Get the current state of a long-running operation. |
-| `get_operation_result(operation_id)` | Get the result of a completed operation. |
-
-### Admin
-
-Power BI Admin API operations.
-
-| Method | Description |
-|---|---|
-| `get_report_users_as_admin(report_id)` | List users with access to a report (admin endpoint). |
-
-### KQLDatabase
-
-Query Kusto (KQL) databases in Microsoft Fabric.
-
-| Method | Description |
-|---|---|
-| `query_kql_database(kql_query, sort_by)` | Execute a KQL query and return results as a DataFrame. |
-
-### Notebook
-
-Manage Fabric notebooks.
-
-| Method | Description |
-|---|---|
-| `list_notebooks(workspace_id)` | List all notebooks in a workspace. |
-| `get_notebook(workspace_id, notebook_id)` | Get the metadata of a specific notebook. |
-
-### Pipeline
+#### Pipeline
 
 Manage Fabric Data Pipelines.
 
 | Method | Description |
 |---|---|
 | `list_pipelines(workspace_id)` | List all Fabric Data Pipelines in a workspace. |
-| `get_pipeline(workspace_id, pipeline_id)` | Get the metadata of a specific pipeline (not its definition). |
+| `get_pipeline(workspace_id, pipeline_id)` | Get the metadata of a specific pipeline. |
 | `get_pipeline_definition(workspace_id, pipeline_id)` | Get the full definition of a Fabric Data Pipeline. |
 | `update_pipeline_definition(workspace_id, pipeline_id, definition)` | Update an existing pipeline definition. |
-| `get_pipeline_activities(workspace_id, pipeline_id_or_name)` | Get the list of activities from a pipeline. Accepts either a pipeline ID or display name. Returns `pipeline_id`, `pipeline_name`, `activity_name`, `activity_type`, and `typeProperties` for each activity. For RefreshDataflow, TridentNotebook, InvokePipeline, and DatasetRefresh activities, resolves the referenced object's display name as `object_name` inside `typeProperties`. |
-| `find_pipelines_by_dataflow(workspace_id, dataflow_id_or_name)` | Find all pipelines in a workspace that reference a specific dataflow. Accepts either a dataflow ID or display name. Returns pipeline ID, name, and matching activity names. |
-| `replace_dataflow_id_in_pipeline(workspace_id, pipeline_id, old_dataflow_id, new_dataflow_id)` | Replace a dataflow ID in all RefreshDataflow activities of a pipeline. Useful after recreating a dataflow with `change_data_destination(mode='replace')`. |
+| `get_pipeline_activities(workspace_id, pipeline_id_or_name)` | Get the list of activities from a pipeline. |
+| `find_pipelines_by_dataflow(workspace_id, dataflow_id_or_name)` | Find all pipelines in a workspace that reference a specific dataflow. |
+| `replace_dataflow_id_in_pipeline(workspace_id, pipeline_id, old_dataflow_id, new_dataflow_id)` | Replace a dataflow ID in all RefreshDataflow activities of a pipeline. |
 
-#### Replacing a dataflow destination and updating pipelines
+#### Other modules
 
-When `change_data_destination(mode='replace')` is used on a **standard Gen2** dataflow, the original is deleted and a new CI/CD dataflow is created with a **new ID**. Pipelines referencing the old ID must be updated:
+| Module | Description |
+|---|---|
+| `Capacity` | Monitor and manage Power BI and Fabric capacities. |
+| `Operations` | Track long-running Fabric API operations. |
+| `Admin` | Power BI Admin API operations. |
+| `KQLDatabase` | Query Kusto (KQL) databases in Microsoft Fabric. |
+| `Notebook` | Manage Fabric notebooks. |
+| `Database` | Query and write to SQL databases (Lakehouse, Warehouse) via ODBC. |
+
+---
+
+### `msdev_kit.graph` — MS Graph (Entra)
+
+Manage Entra ID (Azure AD) users and groups via the MS Graph API.
 
 ```python
-from fabric_api import Auth, Dataflow, Pipeline
+from msdev_kit import Auth
+from msdev_kit.graph import GraphClient
 
-auth = Auth(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
-dataflow = Dataflow(auth.get_token('pbi'))
-pipeline = Pipeline(auth.get_token('fabric'))
+auth = Auth(tenant_id, client_id, client_secret)
+graph = GraphClient(auth)
 
-workspace_id = '<workspace_id>'
-old_dataflow_id = '<dataflow_id>'
-
-# 1. Replace dataflow destination (creates new CI/CD, deletes original)
-result = dataflow.change_data_destination(
-    workspace_id=workspace_id,
-    dataflow_id=old_dataflow_id,
-    destination_type='Warehouse',
-    destination_workspace_id=workspace_id,
-    destination_item_id='<warehouse_id>',
-    mode='replace'
-)
-new_dataflow_id = result['content']['id']
-
-# 2. Find pipelines referencing the old dataflow ID
-matches = pipeline.find_pipelines_by_dataflow(workspace_id, old_dataflow_id)
-
-# 3. Update each pipeline to use the new ID
-for m in matches['content']:
-    pipeline.replace_dataflow_id_in_pipeline(
-        workspace_id, m['pipeline_id'], old_dataflow_id, new_dataflow_id
-    )
+user_id = graph.get_user_id('user@company.com')
+group_id = graph.get_group_id('Data Team')
+members = graph.list_group_members(group_id)
 ```
-
-> **Note:** For CI/CD dataflows, `mode='replace'` updates in-place (same ID), so no pipeline updates are needed. Use `mode='create'` to keep the original untouched and create a new dataflow with a `_cicd` suffix instead.
-
-### Database
-
-Query and write to SQL databases (Lakehouse, Warehouse) via ODBC.
 
 | Method | Description |
 |---|---|
-| `execute_query(query)` | Execute a SQL query against a fabric database (lakehouse, warehouse or sql database). |
-| `write_dataframe(df, table_name, schema='dbo', if_exists='append', chunksize=10000)` | Write a pandas DataFrame to a SQL table. `if_exists` supports `'fail'`, `'replace'`, `'append'`, `'delete_rows'`. |
+| `get_user_id(email)` | Resolve user object ID by UPN/email, with mail fallback. |
+| `get_group_id(group_name)` | Resolve Entra group object ID by display name. |
+| `list_group_members(group_id)` | Paginated member list (id, displayName, mail, UPN). |
+| `add_group_member(group_id, user_id)` | Add user to group. Silently ignores already-member errors. |
+| `remove_group_member(group_id, user_id)` | Remove user from group. Silently ignores 404/403. |
+
+---
+
+### `msdev_kit.sharepoint` — SharePoint
+
+Manage SharePoint files and folders via MS Graph API (no ACS/Office365 dependency).
+
+```python
+from msdev_kit import Auth
+from msdev_kit.sharepoint import SharePointClient
+
+auth = Auth(tenant_id, client_id, client_secret)
+sp = SharePointClient(auth, sp_hostname='company', sp_site_path='sites/DataTeam')
+
+sp.download_file('/Reports/monthly.xlsx', local_dir='./downloads')
+sp.upload_file('/Reports/updated.xlsx', source='./local/updated.xlsx')
+sp.create_folder('/Reports/2026')
+```
+
+| Method | Description |
+|---|---|
+| `download_file(file_path, local_dir)` | Download a file from the default document library. Returns local file path. |
+| `upload_file(remote_path, source, content_type?)` | Upload/overwrite a file. `source` is a local file path (str) or raw bytes. |
+| `create_folder(folder_path)` | Create a folder and all intermediate folders. |
+
+Hostname and site path inputs are normalized automatically — accepts short names (`company`), FQDNs (`company.sharepoint.com`), or full URLs (`https://company.sharepoint.com`).
+
+---
 
 ## Limitations
 
 - The Power BI REST API has a **200 requests per hour** rate limit.
 - Not all users can be updated via the API. See Microsoft docs: [Dataset permissions](https://learn.microsoft.com/en-us/power-bi/developer/embedded/datasets-permissions#get-and-update-dataset-permissions-with-apis).
 - **Dataset query limits** (executeQueries API):
-  - Max **100,000 rows** or **1,000,000 values** (rows × columns) per query, whichever is hit first.
+  - Max **100,000 rows** or **1,000,000 values** (rows x columns) per query, whichever is hit first.
   - Max **15 MB** of data per query.
   - **120 query requests per minute** per user.
   - Only **DAX** queries are supported (no MDX, INFO functions, or DMV).

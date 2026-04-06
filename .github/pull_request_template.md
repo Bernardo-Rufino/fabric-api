@@ -15,5 +15,5 @@
 ## Checklist
 
 - [ ] Code builds successfully (`python -m build`)
-- [ ] Tests pass (`pytest tests/ -v`)
+- [ ] Tests pass (`pytest tests/fabric/ tests/graph/ tests/sharepoint/ -v`)
 - [ ] Updated documentation (README, docstrings) if applicable
