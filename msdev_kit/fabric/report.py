@@ -440,29 +440,40 @@ class Report:
 
     def get_report_pages_and_visuals(
             self,
-            report_definition: Dict,
             workspace_id: str,
-            report_id: str) -> pd.DataFrame:
+            report_id: str,
+            operations: Operations) -> pd.DataFrame:
         """
-        Dispatcher. Detects the report format and delegates to the appropriate
-        pages-and-visuals parser.
+        Fetches report metadata and definition, then delegates to the appropriate
+        pages-and-visuals parser based on the report format.
 
         Args:
-            report_definition (dict): dict with 'format' and 'parts' keys, as
-                returned by report_content['definition'] from the Fabric API.
             workspace_id (str): workspace id.
             report_id (str): report id.
+            operations (Operations): Operations class instance.
 
         Returns:
-            pd.DataFrame: one row per visual. Empty DataFrame for unknown formats.
+            pd.DataFrame: one row per visual. Empty DataFrame on failure or unknown format.
         """
-        fmt = report_definition.get('format', '').lower()
-        parts = report_definition.get('parts', [])
+        metadata_result = self.get_report_metadata(workspace_id, report_id)
+        if metadata_result.get('message') != 'Success':
+            print('get_report_pages_and_visuals: failed to get report metadata.')
+            return pd.DataFrame()
+
+        metadata_format = metadata_result['content'].get('format', '')
+
+        definition_result = self.get_report_definition(workspace_id, report_id, operations)
+        if definition_result.get('message') != 'Success':
+            print('get_report_pages_and_visuals: failed to get report definition.')
+            return pd.DataFrame()
+
+        parts = definition_result['content'].get('parts', [])
+        fmt = metadata_format.lower()
 
         if fmt == 'pbir':
             return self.get_pbir_report_pages_and_visuals(parts, workspace_id, report_id)
 
-        elif fmt == 'pbir-legacy':
+        elif fmt == 'pbirlegacy':
             report_payload = None
             for part in parts:
                 if part.get('path') == 'report.json':
@@ -482,7 +493,7 @@ class Report:
             return self.get_legacy_report_pages_and_visuals(json_data, workspace_id, report_id)
 
         else:
-            print(f'get_report_pages_and_visuals: unsupported format "{fmt}".')
+            print(f'get_report_pages_and_visuals: unsupported format "{metadata_format}".')
             return pd.DataFrame()
 
 
